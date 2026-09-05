@@ -1,0 +1,107 @@
+// Prisma schema for the salon cosmetics POS / inventory system.
+// Connection URLs live in prisma7.config.ts (Prisma 7 keeps them out of this file).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  OWNER
+  STAFF
+}
+
+enum MovementType {
+  IN
+  OUT
+}
+
+enum SaleStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  name      String
+  role      Role     @default(STAFF)
+  createdAt DateTime @default(now())
+
+  stockMovements StockMovement[]
+  sales          Sale[]
+}
+
+model Product {
+  id                String   @id @default(cuid())
+  name              String
+  category          String
+  shade             String?
+  unit              String
+  quantity          Int      @default(0)
+  lowStockThreshold Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  stockMovements StockMovement[]
+  saleItems      SaleItem[]
+
+  // Product list is browsed by category and searched by name.
+  @@index([category])
+  @@index([name])
+}
+
+model StockMovement {
+  id        String       @id @default(cuid())
+  productId String
+  type      MovementType
+  quantity  Int
+  staffId   String
+  note      String?
+  createdAt DateTime     @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  staff   User    @relation(fields: [staffId], references: [id], onDelete: Restrict)
+
+  @@index([productId])
+  @@index([staffId])
+  // Movement history is read newest-first, usually scoped to one product.
+  @@index([productId, createdAt])
+  @@index([createdAt])
+}
+
+model Sale {
+  id                String     @id @default(cuid())
+  staffId           String
+  customerPhone     String
+  totalAmount       Decimal    @db.Decimal(12, 2)
+  paystackReference String?    @unique
+  status            SaleStatus @default(PENDING)
+  createdAt         DateTime   @default(now())
+
+  staff User       @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  items SaleItem[]
+
+  @@index([staffId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model SaleItem {
+  id        String  @id @default(cuid())
+  saleId    String
+  productId String
+  quantity  Int
+  unitPrice Decimal @db.Decimal(12, 2)
+
+  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([saleId])
+  @@index([productId])
+}
