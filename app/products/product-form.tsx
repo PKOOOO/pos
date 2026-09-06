@@ -23,12 +23,11 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { PRODUCT_CATEGORIES, PRODUCT_UNITS } from "@/lib/products";
+import { createProduct, updateProduct } from "@/app/products/actions";
 import {
-  createProduct,
   emptyProductFormState,
-  updateProduct,
   type ProductFormState,
-} from "@/app/products/actions";
+} from "@/app/products/form-state";
 
 export type ProductFormValues = {
   id: string;

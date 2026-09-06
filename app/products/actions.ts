@@ -7,22 +7,12 @@ import { Prisma, Role } from "@/generated/prisma/client";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PRODUCT_CATEGORIES, PRODUCT_UNITS } from "@/lib/products";
+import type { ProductFormState } from "@/app/products/form-state";
 
 const PRODUCTS_PATH = "/products";
 
-export type ProductFormState = {
-  status: "idle" | "success" | "error";
-  message: string;
-  /** field name -> first message for that field, rendered next to the input */
-  fieldErrors: Record<string, string>;
-};
-
-export const emptyProductFormState: ProductFormState = {
-  status: "idle",
-  message: "",
-  fieldErrors: {},
-};
-
+// Only async functions may be exported from this file — see form-state.ts for
+// the state shape and its initial value.
 export type DeleteProductResult = { ok: boolean; message: string };
 
 // Surfaced verbatim to the user, so it reads like a fact about the shop rather
