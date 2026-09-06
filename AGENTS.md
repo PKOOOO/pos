@@ -32,7 +32,7 @@ Core users: shop owner (full access) and staff (stock logging, sales checkout).
 
 ## Current State
 
-Steps 1–4 done.
+Steps 1–5 done.
 
 **Prisma + Neon** — migrated, no drift.
 - `prisma/schema.prisma` — five models, `Role` / `MovementType` / `SaleStatus`
@@ -72,7 +72,24 @@ every URL under it is unchanged.
   the `globals.css` tokens — change one, change the other
 - `/stock`, `/sell`, `/reports` are placeholders so the nav can't 404
 
-Next up: stock movement logging.
+**Stock movement logging** — verified against a live database, concurrency
+included.
+- `lib/stock.ts` — `applyStockMovement()`, the only writer of
+  `Product.quantity` besides product creation. Movement row + count change in
+  one `$transaction`, opened with `SELECT ... FOR UPDATE` (see Database
+  Constraints)
+- `app/(app)/stock/actions.ts` — auth, zod, and the messages; the transaction
+  itself is in `lib/stock.ts` so it can be exercised without a session
+- `app/(app)/stock/page.tsx` — picker (shares `productSearchWhere` with the
+  product list), IN/OUT toggle, quantity stepper, before → after preview
+- `app/(app)/stock/movement-list.tsx` — the ledger, rendered newest-first on
+  /stock and per-product on the product edit page
+- `lib/action-state.ts`, `lib/form-fields.ts` — the action state shape and the
+  zod field parsers, shared by products and stock so both accept the same input
+- `lib/time.ts` — timestamps are formatted in `Africa/Nairobi`, not the host's
+  zone, and on the server so hydration can't disagree
+
+Next up: low-stock alerts.
 
 ## Next.js 16 / Clerk Core 3 Constraints
 
@@ -125,6 +142,18 @@ Next up: stock movement logging.
   times out.
 - **Use `prisma migrate`, not `db push`.** Migration history is the source of
   truth for this deliverable.
+- **`Product.quantity` has exactly two writers**: product creation, and
+  `applyStockMovement()` in `lib/stock.ts`. Anything else breaks the audit
+  trail — the movement rows must always add up to the count.
+- **A stock check must hold the row.** Under READ COMMITTED a plain SELECT in a
+  transaction does not stop two concurrent OUTs from both passing the same
+  "enough stock?" test and driving the count negative. `SELECT ... FOR UPDATE`
+  is what makes the check binding. Verified with five concurrent OUTs against a
+  stock of five: exactly two commit.
+- **Raise `maxWait` on interactive transactions, not just `timeout`.** The 2s
+  default is how long a call waits for its turn to start; five concurrent
+  movements on this Neon link fail with `P2028 Unable to start a transaction in
+  the given time`. `lib/stock.ts` uses `{ maxWait: 10_000, timeout: 15_000 }`.
 
 ## Open Decision
 

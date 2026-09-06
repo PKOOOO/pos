@@ -7,12 +7,21 @@ import { Prisma, Role } from "@/generated/prisma/client";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PRODUCT_CATEGORIES, PRODUCT_UNITS } from "@/lib/products";
-import type { ProductFormState } from "@/app/(app)/products/form-state";
+import type { ActionState } from "@/lib/action-state";
+import {
+  failed,
+  invalid,
+  optionalText,
+  requiredText,
+  succeeded,
+  wholeNumber,
+} from "@/lib/form-fields";
 
 const PRODUCTS_PATH = "/products";
 
-// Only async functions may be exported from this file — see form-state.ts for
-// the state shape and its initial value.
+// Only async functions may be exported from this file — the state shape and its
+// initial value live in lib/action-state.ts, and the field parsers, shared with
+// stock movements so both accept the same input, in lib/form-fields.ts.
 export type DeleteProductResult = { ok: boolean; message: string };
 
 // Surfaced verbatim to the user, so it reads like a fact about the shop rather
@@ -20,37 +29,14 @@ export type DeleteProductResult = { ok: boolean; message: string };
 const HAS_HISTORY_MESSAGE =
   "This product has stock history and can't be deleted.";
 
-// --- validation -------------------------------------------------------------
-
-const requiredText = (label: string, max: number) =>
-  z
-    .string()
-    .trim()
-    .min(1, `${label} is required`)
-    .max(max, `${label} must be ${max} characters or fewer`);
-
-// FormData values are always strings. Rejecting non-digits outright beats
-// coercion: "1.5", "-2" and "" each get a message a person can act on instead
-// of silently becoming 1, -2 or 0.
-const wholeNumber = (label: string) =>
-  z
-    .string()
-    .trim()
-    .min(1, `${label} is required`)
-    .regex(/^\d+$/, `${label} must be a whole number, 0 or more`)
-    .transform(Number)
-    .refine(Number.isSafeInteger, `${label} is too large`);
+// --- validation --------------------------------------------------------------
 
 const productFields = {
   name: requiredText("Name", 120),
   category: z.enum(PRODUCT_CATEGORIES, { error: "Choose a category" }),
   unit: z.enum(PRODUCT_UNITS, { error: "Choose a unit" }),
-  shade: z
-    .string()
-    .trim()
-    .max(80, "Shade must be 80 characters or fewer")
-    // The column is nullable; an empty box means "no shade", not "".
-    .transform((value) => (value.length > 0 ? value : null)),
+  // The column is nullable; an empty box means "no shade", not "".
+  shade: optionalText("Shade", 80),
   lowStockThreshold: wholeNumber("Low-stock threshold"),
 };
 
@@ -75,32 +61,6 @@ function readProductForm(formData: FormData) {
   };
 }
 
-function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
-  const fieldErrors: Record<string, string> = {};
-
-  for (const issue of error.issues) {
-    const field = issue.path[0];
-    // First message per field wins — the form shows one line per input.
-    if (typeof field === "string" && !(field in fieldErrors)) {
-      fieldErrors[field] = issue.message;
-    }
-  }
-
-  return fieldErrors;
-}
-
-function invalid(error: z.ZodError): ProductFormState {
-  return {
-    status: "error",
-    message: "Check the highlighted fields.",
-    fieldErrors: fieldErrorsFrom(error),
-  };
-}
-
-function failed(message: string): ProductFormState {
-  return { status: "error", message, fieldErrors: {} };
-}
-
 // --- actions ----------------------------------------------------------------
 
 /**
@@ -109,9 +69,9 @@ function failed(message: string): ProductFormState {
  * nothing, so every action below re-checks the role itself.
  */
 export async function createProduct(
-  _prevState: ProductFormState,
+  _prevState: ActionState,
   formData: FormData,
-): Promise<ProductFormState> {
+): Promise<ActionState> {
   await requireRole(Role.STAFF);
 
   const parsed = createProductSchema.safeParse(readProductForm(formData));
@@ -121,11 +81,7 @@ export async function createProduct(
     const product = await prisma.product.create({ data: parsed.data });
     revalidatePath(PRODUCTS_PATH);
 
-    return {
-      status: "success",
-      message: `${product.name} added.`,
-      fieldErrors: {},
-    };
+    return succeeded(`${product.name} added.`);
   } catch (error) {
     console.error("createProduct failed", error);
     return failed("Couldn't save that product. Try again.");
@@ -134,9 +90,9 @@ export async function createProduct(
 
 export async function updateProduct(
   productId: string,
-  _prevState: ProductFormState,
+  _prevState: ActionState,
   formData: FormData,
-): Promise<ProductFormState> {
+): Promise<ActionState> {
   await requireRole(Role.STAFF);
 
   const parsed = updateProductSchema.safeParse(readProductForm(formData));
@@ -151,11 +107,7 @@ export async function updateProduct(
     revalidatePath(PRODUCTS_PATH);
     revalidatePath(`/products/${productId}/edit`);
 
-    return {
-      status: "success",
-      message: `${product.name} updated.`,
-      fieldErrors: {},
-    };
+    return succeeded(`${product.name} updated.`);
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&

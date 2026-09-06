@@ -24,10 +24,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { PRODUCT_CATEGORIES, PRODUCT_UNITS } from "@/lib/products";
 import { createProduct, updateProduct } from "@/app/(app)/products/actions";
-import {
-  emptyProductFormState,
-  type ProductFormState,
-} from "@/app/(app)/products/form-state";
+import { emptyActionState, type ActionState } from "@/lib/action-state";
 
 export type ProductFormValues = {
   id: string;
@@ -51,14 +48,14 @@ export function ProductForm({ product }: { product?: ProductFormValues }) {
   // input, so the id never round-trips through the rendered HTML.
   const action = isEdit ? updateProduct.bind(null, product.id) : createProduct;
 
-  const [state, formAction, pending] = useActionState<
-    ProductFormState,
-    FormData
-  >(action, emptyProductFormState);
+  const [state, formAction, pending] = useActionState<ActionState, FormData>(
+    action,
+    emptyActionState,
+  );
 
   // The action's result is the toast trigger. Guarding on identity keeps a
   // re-render from re-firing a toast for a result already shown.
-  const shownFor = useRef<ProductFormState | null>(null);
+  const shownFor = useRef<ActionState | null>(null);
 
   useEffect(() => {
     if (state === shownFor.current || state.status === "idle") return;

@@ -19,11 +19,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Prisma, Role } from "@/generated/prisma/client";
+import { Role } from "@/generated/prisma/client";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
-import { isLowStock, isProductCategory } from "@/lib/products";
+import {
+  isLowStock,
+  isProductCategory,
+  productSearchWhere,
+} from "@/lib/products";
+import { firstSearchParam } from "@/lib/search-params";
 import { ProductFilters } from "@/app/(app)/products/product-filters";
 
 type ProductRow = {
@@ -35,11 +40,6 @@ type ProductRow = {
   quantity: number;
   lowStockThreshold: number;
 };
-
-// A search param can legitimately arrive repeated (`?q=a&q=b`); take the first.
-function firstValue(value: string | string[] | undefined): string {
-  return (Array.isArray(value) ? value[0] : value) ?? "";
-}
 
 function StockBadge({ product }: { product: ProductRow }) {
   if (product.quantity === 0) {
@@ -62,20 +62,15 @@ export default async function ProductsPage({
   await requireRole(Role.STAFF);
 
   const params = await searchParams;
-  const query = firstValue(params.q).trim();
-  const rawCategory = firstValue(params.category);
+  const query = firstSearchParam(params.q).trim();
+  const rawCategory = firstSearchParam(params.category);
   // Anything that isn't one of our categories is treated as no filter rather
   // than as a query that silently returns nothing.
   const category = isProductCategory(rawCategory) ? rawCategory : null;
 
-  // `category` is an equality match, so it uses the @@index([category]); the
-  // list is ordered by name, which uses @@index([name]). The name search is a
-  // case-insensitive `contains`, which scans — fine at a single shop's catalogue
-  // size, and the alternative (a trigram index) isn't worth the migration yet.
-  const where: Prisma.ProductWhereInput = {
-    ...(query ? { name: { contains: query, mode: "insensitive" } } : {}),
-    ...(category ? { category } : {}),
-  };
+  // Shared with the stock screen's picker so the two searches agree. Ordering
+  // by name uses @@index([name]).
+  const where = productSearchWhere({ query, category });
 
   const [products, totalCount] = await Promise.all([
     prisma.product.findMany({ where, orderBy: { name: "asc" } }),

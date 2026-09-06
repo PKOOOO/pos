@@ -42,3 +42,26 @@ export function isLowStock(product: {
 }): boolean {
   return product.quantity <= product.lowStockThreshold;
 }
+
+/**
+ * The `where` shape behind both the product list and the stock screen's picker,
+ * so the two searches always agree.
+ *
+ * `category` is an equality match and uses @@index([category]). The name search
+ * is a case-insensitive `contains`, which scans — fine at one shop's catalogue
+ * size, and a trigram index isn't worth the migration yet.
+ */
+export function productSearchWhere({
+  query,
+  category,
+}: {
+  query?: string;
+  category?: string | null;
+}) {
+  return {
+    ...(query
+      ? { name: { contains: query, mode: "insensitive" as const } }
+      : {}),
+    ...(category ? { category } : {}),
+  };
+}

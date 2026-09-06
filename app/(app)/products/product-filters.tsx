@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useTransition } from "react";
 import { SearchIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -14,12 +14,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { useUrlSearch } from "@/hooks/use-url-search";
 import { PRODUCT_CATEGORIES } from "@/lib/products";
 
 // The Select needs a real value for "no filter"; the URL just omits the param.
 const ALL_CATEGORIES = "all";
-
-const SEARCH_DEBOUNCE_MS = 300;
 
 /**
  * Search and category filter. Both live in the URL rather than component state,
@@ -38,15 +37,10 @@ export function ProductFilters({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [pending, startTransition] = useTransition();
-  const [term, setTerm] = useState(query);
-
-  // What the URL currently reflects, so the debounce can tell a local edit apart
-  // from a value that arrived from the URL.
-  const applied = useRef(query);
+  const [navigating, startTransition] = useTransition();
 
   const hrefFor = useCallback(
-    (nextQuery: string, nextCategory: string | null) => {
+    (nextQuery: string, nextCategory: string | null = category) => {
       const params = new URLSearchParams();
       const trimmed = nextQuery.trim();
 
@@ -56,29 +50,17 @@ export function ProductFilters({
       const search = params.toString();
       return search ? `${pathname}?${search}` : pathname;
     },
-    [pathname],
+    [pathname, category],
   );
 
-  // Adopt a query that changed outside this input (Clear, or back/forward).
-  useEffect(() => {
-    if (query !== applied.current) {
-      applied.current = query;
-      setTerm(query);
-    }
-  }, [query]);
+  const {
+    term,
+    setTerm,
+    setImmediately,
+    pending: searching,
+  } = useUrlSearch({ query, hrefFor });
 
-  useEffect(() => {
-    if (term.trim() === applied.current) return;
-
-    const timer = setTimeout(() => {
-      applied.current = term.trim();
-      startTransition(() => {
-        router.replace(hrefFor(term, category), { scroll: false });
-      });
-    }, SEARCH_DEBOUNCE_MS);
-
-    return () => clearTimeout(timer);
-  }, [term, category, hrefFor, router]);
+  const pending = searching || navigating;
 
   function onCategoryChange(value: string | null) {
     const next = !value || value === ALL_CATEGORIES ? null : value;
@@ -137,8 +119,8 @@ export function ProductFilters({
             aria-label="Clear filters"
             className="size-11"
             onClick={() => {
-              applied.current = "";
-              setTerm("");
+              // Clears the category too, so it can't go through the debounce.
+              setImmediately("");
               startTransition(() => {
                 router.replace(pathname, { scroll: false });
               });
