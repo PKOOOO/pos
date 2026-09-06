@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { deleteProduct } from "@/app/products/actions";
+import { deleteProduct } from "@/app/(app)/products/actions";
 
 /**
  * Owner-only in the UI, and owner-only in the action — hiding the button is not

@@ -32,7 +32,7 @@ Core users: shop owner (full access) and staff (stock logging, sales checkout).
 
 ## Current State
 
-Steps 1–2 done.
+Steps 1–4 done.
 
 **Prisma + Neon** — migrated, no drift.
 - `prisma/schema.prisma` — five models, `Role` / `MovementType` / `SaleStatus`
@@ -50,16 +50,29 @@ Steps 1–2 done.
 **Product management** — verified against a live database.
 - `lib/products.ts` — `PRODUCT_CATEGORIES`, `PRODUCT_UNITS`, `isLowStock()`;
   client-safe, shared by the form, the filters, and the list
-- `app/products/actions.ts` — `createProduct` / `updateProduct` (STAFF) and
-  `deleteProduct` (OWNER, strict), each calling `requireRole()` first; zod
+- `app/(app)/products/actions.ts` — `createProduct` / `updateProduct` (STAFF)
+  and `deleteProduct` (OWNER, strict), each calling `requireRole()` first; zod
   validation; the update schema has no `quantity` field at all
-- `app/products/page.tsx` — list, search + category filter in URL params,
+- `app/(app)/products/form-state.ts` — the action state shape lives here, NOT
+  in `actions.ts`: a `"use server"` module may only export async functions
+- `app/(app)/products/page.tsx` — list, search + category filter in URL params,
   table on desktop / tappable cards on phones, low-stock rows flagged
-- `app/products/new` and `app/products/[id]/edit` — dedicated form routes
-  (fewer taps on a phone than a dialog), sonner toasts on the result
+- `app/(app)/products/new` and `.../[id]/edit` — dedicated form routes (fewer
+  taps on a phone than a dialog), sonner toasts on the result
 
-Next up: app shell + navigation (nothing links the sections together yet
-beyond a dashboard link), then stock movement logging.
+**App shell** — `app/(app)/` route group; the group adds no path segment, so
+every URL under it is unchanged.
+- `app/(app)/layout.tsx` — sidebar on desktop, fixed bottom tab bar on phones,
+  header with the user's name, role badge, and Clerk's `<UserButton>`
+- `app/(app)/app-nav.tsx` — one nav list feeding both bars. Icons are component
+  references, which can't cross the server → client boundary, so the layout
+  passes `isOwner` and the client filters `ownerOnly` items
+- `lib/clerk-appearance.ts` — shared `appearance` for `<SignIn>`, `<SignUp>`,
+  `<UserButton>`. Clerk parses colours itself, so these are hex duplicates of
+  the `globals.css` tokens — change one, change the other
+- `/stock`, `/sell`, `/reports` are placeholders so the nav can't 404
+
+Next up: stock movement logging.
 
 ## Next.js 16 / Clerk Core 3 Constraints
 
@@ -186,9 +199,9 @@ Schema conventions already established:
 
 1. ~~Prisma schema + Neon setup~~ ✅
 2. ~~Clerk auth + role-based access~~ ✅
-3. App shell + navigation ← next
-4. ~~Product management (CRUD)~~ ✅ (built ahead of the shell)
-5. Stock movement logging
+3. ~~App shell + navigation~~ ✅
+4. ~~Product management (CRUD)~~ ✅
+5. Stock movement logging ← next
 6. Low-stock alerts
 7. Checkout + Paystack STK push + webhook
 8. PWA + offline sync (Dexie.js)

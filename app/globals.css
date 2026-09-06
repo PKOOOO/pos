@@ -48,73 +48,94 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * Salon palette: a deep berry primary on a warm off-white, which reads as
+ * cosmetics without tinting the product data itself.
+ *
+ * Contrast was measured, not eyeballed — this gets used under shop lighting on
+ * cheap phone screens. Every text pair below is at least 6.2:1 (WCAG AA wants
+ * 4.5:1), and --input clears 3:1 against both background and card so field
+ * edges stay findable. The hex beside each token is the source value the ratios
+ * were computed from, and is what Clerk's appearance prop is given, since Clerk
+ * parses colours itself. Keep the two in step.
+ *
+ * Measured (light): body 17.6:1 · muted 6.8:1 · primary button 8.7:1 ·
+ * destructive text 6.2:1 · sidebar active 8.7:1 · input border 3.2:1.
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --background: oklch(0.982 0.0041 337.35); /* #FBF8FA */
+  --foreground: oklch(0.189 0.0201 342.51); /* #1A1016 */
+  --card: oklch(1 0 0); /* #FFFFFF */
+  --card-foreground: oklch(0.189 0.0201 342.51); /* #1A1016 */
+  --popover: oklch(1 0 0); /* #FFFFFF */
+  --popover-foreground: oklch(0.189 0.0201 342.51); /* #1A1016 */
+  --primary: oklch(0.433 0.1543 351.53); /* #8A1D5A */
+  --primary-foreground: oklch(1 0 0); /* #FFFFFF */
+  --secondary: oklch(0.9413 0.0143 343.21); /* #F3E8EE */
+  --secondary-foreground: oklch(0.3103 0.0651 341.18); /* #46223A */
+  --muted: oklch(0.9516 0.0075 345.35); /* #F3EDF0 */
+  --muted-foreground: oklch(0.4637 0.034 337.19); /* #665260 */
+  --accent: oklch(0.9372 0.0252 341.84); /* #F7E4EF */
+  --accent-foreground: oklch(0.3711 0.1251 350.98); /* #6D1A48 */
+  --destructive: oklch(0.5013 0.1783 28.7); /* #B3261E */
+  --border: oklch(0.7958 0.0271 339.51); /* #C9B6C2 */
+  --input: oklch(0.6399 0.0314 340.41); /* #9A8592 */
+  --ring: oklch(0.433 0.1543 351.53); /* #8A1D5A */
+  --chart-1: oklch(0.433 0.1543 351.53); /* #8A1D5A */
+  --chart-2: oklch(0.5989 0.146 358.29); /* #C2557F */
+  --chart-3: oklch(0.7395 0.1024 359.92); /* #E08FA8 */
+  --chart-4: oklch(0.6521 0.1322 81.57); /* #B8860B */
+  --chart-5: oklch(0.4288 0.1316 299.37); /* #5B3A8C */
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.9587 0.0092 341.81); /* #F6EFF3 */
+  --sidebar-foreground: oklch(0.189 0.0201 342.51); /* #1A1016 */
+  --sidebar-primary: oklch(0.433 0.1543 351.53); /* #8A1D5A */
+  --sidebar-primary-foreground: oklch(1 0 0); /* #FFFFFF */
+  --sidebar-accent: oklch(0.9091 0.0203 340.73); /* #EBDCE5 */
+  --sidebar-accent-foreground: oklch(0.3711 0.1251 350.98); /* #6D1A48 */
+  --sidebar-border: oklch(0.7958 0.0271 339.51); /* #C9B6C2 */
+  --sidebar-ring: oklch(0.433 0.1543 351.53); /* #8A1D5A */
+
+  /* next/font sets --font-geist-sans on <html>; @theme maps font-sans to
+     --font-sans, so without this line the utility resolves to nothing. */
+  --font-sans: var(--font-geist-sans);
 }
 
+/* Nothing toggles `.dark` yet (no theme switch shipped). Kept in step with the
+   light palette so adding one is a one-line change, and measured the same way:
+   body 16.5:1 · muted 8.9:1 · primary button 8.6:1 · input border 3.6:1. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: oklch(0.187 0.0126 338.56); /* #171115 */
+  --foreground: oklch(0.9587 0.0092 341.81); /* #F6EFF3 */
+  --card: oklch(0.2282 0.0143 336.39); /* #211A1F */
+  --card-foreground: oklch(0.9587 0.0092 341.81); /* #F6EFF3 */
+  --popover: oklch(0.2282 0.0143 336.39); /* #211A1F */
+  --popover-foreground: oklch(0.9587 0.0092 341.81); /* #F6EFF3 */
+  --primary: oklch(0.8073 0.0991 347.39); /* #F0A6CC */
+  --primary-foreground: oklch(0.2501 0.0744 349.3); /* #3A0F27 */
+  --secondary: oklch(0.2844 0.0215 336.05); /* #31262E */
+  --secondary-foreground: oklch(0.9587 0.0092 341.81); /* #F6EFF3 */
+  --muted: oklch(0.261 0.0185 333.89); /* #2A2128 */
+  --muted-foreground: oklch(0.7697 0.0264 337.94); /* #C0AEBA */
+  --accent: oklch(0.3074 0.0289 341.03); /* #3A2A34 */
+  --accent-foreground: oklch(0.9587 0.0092 341.81); /* #F6EFF3 */
+  --destructive: oklch(0.7453 0.1265 24.66); /* #F28B84 */
+  --border: oklch(0.3774 0.0242 334.14); /* #4A3D47 */
+  --input: oklch(0.5409 0.0279 336.56); /* #7A6975 */
+  --ring: oklch(0.8073 0.0991 347.39); /* #F0A6CC */
+  --chart-1: oklch(0.8073 0.0991 347.39); /* #F0A6CC */
+  --chart-2: oklch(0.5989 0.146 358.29); /* #C2557F */
+  --chart-3: oklch(0.433 0.1543 351.53); /* #8A1D5A */
+  --chart-4: oklch(0.785 0.1403 86.63); /* #E0B23C */
+  --chart-5: oklch(0.6569 0.1262 298.02); /* #9B7FD4 */
+  --sidebar: oklch(0.2109 0.0146 336.5); /* #1D161B */
+  --sidebar-foreground: oklch(0.9587 0.0092 341.81); /* #F6EFF3 */
+  --sidebar-primary: oklch(0.8073 0.0991 347.39); /* #F0A6CC */
+  --sidebar-primary-foreground: oklch(0.2501 0.0744 349.3); /* #3A0F27 */
+  --sidebar-accent: oklch(0.2877 0.0259 334.52); /* #332630 */
+  --sidebar-accent-foreground: oklch(0.9587 0.0092 341.81); /* #F6EFF3 */
+  --sidebar-border: oklch(0.3774 0.0242 334.14); /* #4A3D47 */
+  --sidebar-ring: oklch(0.8073 0.0991 347.39); /* #F0A6CC */
 }
 
 @layer base {

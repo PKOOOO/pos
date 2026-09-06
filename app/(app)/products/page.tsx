@@ -24,7 +24,7 @@ import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
 import { isLowStock, isProductCategory } from "@/lib/products";
-import { ProductFilters } from "@/app/products/product-filters";
+import { ProductFilters } from "@/app/(app)/products/product-filters";
 
 type ProductRow = {
   id: string;
@@ -87,15 +87,6 @@ export default async function ProductsPage({
 
   return (
     <main className="flex flex-1 flex-col gap-4 p-4">
-      <div>
-        <Link
-          href="/dashboard"
-          className="text-sm text-muted-foreground underline-offset-4 hover:underline"
-        >
-          ← Dashboard
-        </Link>
-      </div>
-
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Products</h1>

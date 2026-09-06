@@ -7,7 +7,7 @@ import { Prisma, Role } from "@/generated/prisma/client";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PRODUCT_CATEGORIES, PRODUCT_UNITS } from "@/lib/products";
-import type { ProductFormState } from "@/app/products/form-state";
+import type { ProductFormState } from "@/app/(app)/products/form-state";
 
 const PRODUCTS_PATH = "/products";
 

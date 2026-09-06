@@ -4,8 +4,8 @@ import { notFound } from "next/navigation";
 import { Role } from "@/generated/prisma/client";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { DeleteProductButton } from "@/app/products/delete-product-button";
-import { ProductForm } from "@/app/products/product-form";
+import { DeleteProductButton } from "@/app/(app)/products/delete-product-button";
+import { ProductForm } from "@/app/(app)/products/product-form";
 
 export default async function EditProductPage({
   params,

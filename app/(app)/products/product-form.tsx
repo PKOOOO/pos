@@ -23,11 +23,11 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { PRODUCT_CATEGORIES, PRODUCT_UNITS } from "@/lib/products";
-import { createProduct, updateProduct } from "@/app/products/actions";
+import { createProduct, updateProduct } from "@/app/(app)/products/actions";
 import {
   emptyProductFormState,
   type ProductFormState,
-} from "@/app/products/form-state";
+} from "@/app/(app)/products/form-state";
 
 export type ProductFormValues = {
   id: string;
@@ -215,8 +215,9 @@ export function ProductForm({ product }: { product?: ProductFormValues }) {
         </Field>
       </FieldGroup>
 
-      {/* Sticky on a phone so Save is always in reach of a thumb. */}
-      <div className="sticky bottom-0 -mx-4 mt-auto flex gap-3 border-t bg-background px-4 py-3">
+      {/* Sticky on a phone so Save is always in reach of a thumb — offset by the
+          height of the fixed bottom tab bar so the two don't overlap. */}
+      <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] -mx-4 mt-auto flex gap-3 border-t bg-background px-4 py-3 md:bottom-0">
         <Link
           href="/products"
           className={buttonVariants({

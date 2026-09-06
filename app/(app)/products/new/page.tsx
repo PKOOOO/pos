@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Role } from "@/generated/prisma/client";
 import { requireRole } from "@/lib/auth";
-import { ProductForm } from "@/app/products/product-form";
+import { ProductForm } from "@/app/(app)/products/product-form";
 
 export default async function NewProductPage() {
   // Staff add products themselves; the owner can too.
