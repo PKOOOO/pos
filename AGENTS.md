@@ -7,9 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
-
 # CLAUDE.md
-
 
 Project context for Claude Code. Read this before making changes.
 
@@ -22,10 +20,10 @@ Core users: shop owner (full access) and staff (stock logging, sales checkout).
 
 ## Tech Stack
 
-- **Framework:** Next.js (App Router)
+- **Framework:** Next.js 16 (App Router, Turbopack)
 - **ORM:** Prisma **7.10.0 (pinned)** + `@prisma/adapter-pg`
 - **Database:** PostgreSQL via Neon
-- **Auth:** Clerk (role-based: OWNER / STAFF via public metadata)
+- **Auth:** Clerk (Core 3) — role-based: OWNER / STAFF
 - **Hosting:** Vercel
 - **Styling:** Tailwind CSS + shadcn/ui
 - **Offline:** next-pwa + Dexie.js (IndexedDB) for offline-first stock logging
@@ -34,68 +32,93 @@ Core users: shop owner (full access) and staff (stock logging, sales checkout).
 
 ## Current State
 
-Step 1 is done — Prisma + Neon are set up and migrated. Existing files:
+Steps 1–2 done.
 
-- `prisma/schema.prisma` — all five models, `Role` / `MovementType` /
-  `SaleStatus` enums, relations, indexes on every FK plus products by
-  category/name, movement history newest-first per product, and sales by status
-- `prisma7.config.ts` — Prisma 7 config; connection URLs live here, not in schema
-- `lib/prisma.ts` — client singleton, guarded against dev hot-reload connection leaks
-- `prisma/migrations/` — applied, `migrate status` clean, no drift
+**Prisma + Neon** — migrated, no drift.
+- `prisma/schema.prisma` — five models, `Role` / `MovementType` / `SaleStatus`
+  enums, relations, indexes on every FK plus products by category/name,
+  movement history newest-first per product, sales by status
+- `prisma7.config.ts` — connection URLs live here, not in schema
+- `lib/prisma.ts` — client singleton, hot-reload guarded, plus the
+  `setDefaultAutoSelectFamilyAttemptTimeout` fix (see DB Constraints)
 
-Step 2 is done — Clerk auth + role-based access:
+**Clerk auth** — verified against a live database.
+- `proxy.ts` — optimistic signed-out redirect only
+- `lib/auth.ts` — `getCurrentUser()` (upsert-by-clerkId), `requireRole()`
+- `app/api/webhooks/clerk/route.ts` — `verifyWebhook`, idempotent, replay-safe
 
-- `proxy.ts` — Next 16 renamed the `middleware` convention to `proxy`; runs
-  `clerkMiddleware()` as an optimistic signed-out redirect only. Its matcher
-  excludes `/api/webhooks/*` (Clerk signs those with Svix and sends no session
-  cookie, so a gate there 401s every delivery and Clerk retries forever)
-- `lib/auth.ts` — `getCurrentUser()` (React `cache()`d, upserts our `User` by
-  `clerkId` on every authenticated request — the guaranteed sync path) and
-  `requireRole()` (redirects for pages, returns 401/403 with
-  `{ context: "route" }` for route handlers)
-- `app/api/webhooks/clerk/route.ts` — `verifyWebhook()`, upsert on
-  `user.created` / `user.updated`, deliberate no-op on `user.deleted`
-- `app/sign-in`, `app/sign-up`, `app/dashboard` — minimal signed-in shell
+**Product management** — verified against a live database.
+- `lib/products.ts` — `PRODUCT_CATEGORIES`, `PRODUCT_UNITS`, `isLowStock()`;
+  client-safe, shared by the form, the filters, and the list
+- `app/products/actions.ts` — `createProduct` / `updateProduct` (STAFF) and
+  `deleteProduct` (OWNER, strict), each calling `requireRole()` first; zod
+  validation; the update schema has no `quantity` field at all
+- `app/products/page.tsx` — list, search + category filter in URL params,
+  table on desktop / tappable cards on phones, low-stock rows flagged
+- `app/products/new` and `app/products/[id]/edit` — dedicated form routes
+  (fewer taps on a phone than a dialog), sonner toasts on the result
 
-Auth conventions worth keeping:
+Next up: app shell + navigation (nothing links the sections together yet
+beyond a dashboard link), then stock movement logging.
 
-- **Roles are never written from Clerk.** `syncUser()` sets `role` on create
-  only; the first OWNER is promoted by hand in the DB, and an update would
-  demote them on their next request.
-- **The proxy is not the authorization boundary.** Server Functions dispatch as
-  POSTs to their own route, so a matcher change can silently drop coverage —
-  every page and route handler re-checks with `getCurrentUser()`/`requireRole()`.
-- `createRouteMatcher` is deprecated in Clerk 7 and `<SignedIn>` / `<SignedOut>`
-  / `<Protect>` were removed in Core 3 — use `<Show when="signed-in">` instead.
+## Next.js 16 / Clerk Core 3 Constraints
 
-Next up: product management (CRUD).
+- **`proxy.ts`, not `middleware.ts`.** Next 16 renamed the convention;
+  `middleware.ts` still runs but warns on build. Proxy is Node-runtime only,
+  which suits Clerk fine.
+- **No `createRouteMatcher`.** Deprecated in Clerk 7 — path matching can diverge
+  from how Next actually routes requests (Server Functions dispatch as POSTs to
+  their declaring route), leaving protected resources reachable.
+- **`<SignedIn>`, `<SignedOut>`, `<Protect>` were removed in Clerk Core 3** —
+  they throw at runtime. Use `<Show when="signed-in">`.
+- **Auth is enforced per-route via `requireRole()` / `getCurrentUser()`, not by
+  the proxy matcher.** Every new page and route handler must call one
+  explicitly — a forgotten call fails open silently.
+- **Webhook routes must be excluded from proxy protection** or Clerk returns 401.
+  Verify at runtime (unsigned POST should hit the handler and 400), not by
+  reading the regex.
+- **`redirectToSignIn()` reads `NEXT_PUBLIC_CLERK_SIGN_IN_URL` /
+  `SIGN_UP_URL` from env vars only**, not from props.
+- **`syncUser()` sets `role` on create only, never on update.** If `role` moves
+  into the update clause, a manually promoted OWNER silently reverts to STAFF
+  on their next request.
+- **`requireRole(Role.STAFF)` accepts an OWNER** — deliberate; the owner has
+  full access. Owner-only actions use `requireRole(Role.OWNER)`, which is strict.
 
-## Prisma 7 Constraints — read before touching the DB layer
+## Database Constraints — read before touching the DB layer
 
 - **Do not bump Prisma.** `pnpm add prisma` resolves to an 8.0 release candidate
-  on the `latest` dist-tag. 7.10.0 is pinned deliberately for a fixed-price
-  deliverable.
-- **No `url` in `schema.prisma`.** Prisma 7 requires a driver adapter; queries go
-  through `@prisma/adapter-pg`.
+  on the `latest` dist-tag. 7.10.0 is pinned deliberately.
+- **No `url` in `schema.prisma`.** Prisma 7 requires a driver adapter; queries
+  go through `@prisma/adapter-pg`.
 - **Two connection strings.** App runtime uses the pooled `DATABASE_URL`;
   migrations use the unpooled `DIRECT_URL` (DDL and advisory locks don't survive
   PgBouncer).
-- **`P1001` on first connect is usually a Neon cold start.** Retry before
-  diagnosing networking.
-- **`AggregateError [ETIMEDOUT]` with an empty message is NOT a dead database.**
-  Neon resolves to both IPv6 and IPv4; on a network with no IPv6 route Node's
-  Happy Eyeballs falls back to IPv4 but cancels each attempt after 250ms, and
-  the handshake to `us-east-2` measures ~275ms from Kenya — so it failed every
-  time, deterministically. `lib/prisma.ts` raises the budget with
-  `net.setDefaultAutoSelectFamilyAttemptTimeout(5_000)`; do not remove it.
-  Only the Node app is affected — `prisma migrate` uses Prisma's Rust schema
-  engine and connects fine, which is why migrations looked healthy while every
-  app query timed out. See https://github.com/nodejs/node/issues/54359
-- **The DB is in `us-east-2`, ~275ms from Nairobi.** Every query pays that
-  round-trip. If the app feels slow on the shop floor, region is the first
-  thing to look at, not the query — `eu-central-1` would roughly halve it.
+- **Do not remove `net.setDefaultAutoSelectFamilyAttemptTimeout(5_000)` from
+  `lib/prisma.ts`.** Neon publishes AAAA and A records. With no IPv6 route, the
+  v6 attempt fails instantly and Node falls back to IPv4 — but Happy Eyeballs
+  cancels each attempt at 250ms, and the handshake takes ~275ms. Every query
+  times out, deterministically. `pg` has no per-connection escape hatch, so the
+  process default is the only lever. `--dns-result-order=ipv4first` does NOT
+  fix this — the v4 attempt still gets the 250ms cap. Tracked at
+  nodejs/node#54359.
+- **`ETIMEDOUT` with an empty message is the above, not a dead host.** Unwrap
+  the `AggregateError` to see the real per-address errors.
+- **`P1001` on first connect can be a Neon cold start** — retry once. It is a
+  different failure from `ETIMEDOUT`; don't conflate them.
+- **A clean `prisma migrate status` does NOT prove the app can reach the
+  database.** Migrations use Prisma's Rust schema engine with its own DNS and
+  never touch Node's socket path. Migrations can succeed while every app query
+  times out.
 - **Use `prisma migrate`, not `db push`.** Migration history is the source of
   truth for this deliverable.
+
+## Open Decision
+
+Neon project is in `us-east-2`; the ~275ms handshake is the floor on every
+query from Nairobi. `eu-central-1` would roughly halve it. Moving is cheap while
+the database is empty and expensive after go-live. Not yet actioned — this is a
+client-facing call on a paid deliverable.
 
 ## Data Model
 
@@ -111,8 +134,14 @@ tables) — keep this simple unless the client asks for combinatorial variants l
 Schema conventions already established:
 
 - Money is `Decimal(12,2)` — never float
-- `onDelete: Restrict` on `Product` and `User` so stock/sales history can't be orphaned
+- `onDelete: Restrict` on `Product` and `User` so stock/sales history can't be
+  orphaned. Handle `P2003` with a readable message rather than letting it throw.
 - `SaleItem` cascades with its parent `Sale`
+- `user.deleted` webhooks must NOT hard-delete the `User` row — Restrict blocks it
+- **`Product.quantity` is only settable on create.** Every subsequent change
+  goes through `StockMovement`, or the audit trail is worthless.
+- Category is a constrained string (fixed Select options), not a `Category`
+  table — free text gets typo'd into three spellings of the same thing.
 
 ## In Scope
 
@@ -129,6 +158,7 @@ Schema conventions already established:
 - Barcode scanning
 - Accounting/invoicing
 - Multi-branch/location support
+- Custom-built auth UI — use Clerk's components with the `appearance` prop
 - Anything beyond one round of post-delivery revisions
 
 ## Conventions
@@ -144,21 +174,25 @@ Schema conventions already established:
   daily, on the shop floor)
 - Prefer server actions / API routes over client-side data fetching for
   anything touching stock or payment state
+- Hiding a nav item is not security — guard the route too
 - Commit after each working feature, not at the end of a whole prompt session
-- Verify against the real database rather than assuming — round-trip tests on
-  Decimal handling, enum mapping, unique constraints, and FK restricts are worth
-  the few minutes they cost
+- Verify against the real database rather than assuming. Round-trip tests on
+  Decimal handling, enum mapping, unique constraints, FK restricts, and webhook
+  replay have each caught real issues on this project.
+- Prefer runtime proof over reading config. The webhook exclusion was verified
+  with a 404-vs-307 pair, not by inspecting a regex.
 
 ## Build Order
 
 1. ~~Prisma schema + Neon setup~~ ✅
 2. ~~Clerk auth + role-based access~~ ✅
-3. Product management (CRUD) ← next
-4. Stock movement logging
-5. Low-stock alerts
-6. Checkout + Paystack STK push + webhook
-7. PWA + offline sync (Dexie.js)
-8. Deploy to Vercel
+3. App shell + navigation ← next
+4. ~~Product management (CRUD)~~ ✅ (built ahead of the shell)
+5. Stock movement logging
+6. Low-stock alerts
+7. Checkout + Paystack STK push + webhook
+8. PWA + offline sync (Dexie.js)
+9. Deploy to Vercel
 
 ## Notes
 
@@ -166,4 +200,8 @@ Schema conventions already established:
   a separately agreed addition — keep it tracked as distinct from the base scope
   in case of future scope questions.
 - Target device: shop staff will mostly use this on a phone at the counter, not
-  a desktop — design mobile-first.
+  a desktop — design mobile-first. Prioritise contrast and tap-target size:
+  this gets used under shop lighting, on cheap screens, by someone in a hurry.
+- ngrok's free domain changes on every restart, so the Clerk webhook endpoint
+  needs re-pointing each dev session. `allowedDevOrigins` in `next.config.ts`
+  needs the current ngrok host too.

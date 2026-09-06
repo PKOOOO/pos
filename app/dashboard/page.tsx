@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 
+import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 
 // Placeholder shell. Staff work this on a phone at the counter, so it is
@@ -25,8 +27,15 @@ export default async function DashboardPage() {
         <dd className="text-lg font-medium">{user.role}</dd>
       </dl>
 
+      <Link
+        href="/products"
+        className={buttonVariants({ className: "h-11 px-4 text-base" })}
+      >
+        Products
+      </Link>
+
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Products, stock logging, and checkout land here next.
+        Stock logging and checkout land here next.
       </p>
     </main>
   );
