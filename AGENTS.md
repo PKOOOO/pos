@@ -10,6 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # CLAUDE.md
 
+
 Project context for Claude Code. Read this before making changes.
 
 ## Project
@@ -22,7 +23,7 @@ Core users: shop owner (full access) and staff (stock logging, sales checkout).
 ## Tech Stack
 
 - **Framework:** Next.js (App Router)
-- **ORM:** Prisma
+- **ORM:** Prisma **7.10.0 (pinned)** + `@prisma/adapter-pg`
 - **Database:** PostgreSQL via Neon
 - **Auth:** Clerk (role-based: OWNER / STAFF via public metadata)
 - **Hosting:** Vercel
@@ -30,6 +31,59 @@ Core users: shop owner (full access) and staff (stock logging, sales checkout).
 - **Offline:** next-pwa + Dexie.js (IndexedDB) for offline-first stock logging
 - **Payments:** Paystack (Kenya M-Pesa `mobile_money` channel → STK push)
 - **Package manager:** pnpm
+
+## Current State
+
+Step 1 is done — Prisma + Neon are set up and migrated. Existing files:
+
+- `prisma/schema.prisma` — all five models, `Role` / `MovementType` /
+  `SaleStatus` enums, relations, indexes on every FK plus products by
+  category/name, movement history newest-first per product, and sales by status
+- `prisma7.config.ts` — Prisma 7 config; connection URLs live here, not in schema
+- `lib/prisma.ts` — client singleton, guarded against dev hot-reload connection leaks
+- `prisma/migrations/` — applied, `migrate status` clean, no drift
+
+Step 2 is done — Clerk auth + role-based access:
+
+- `proxy.ts` — Next 16 renamed the `middleware` convention to `proxy`; runs
+  `clerkMiddleware()` as an optimistic signed-out redirect only. Its matcher
+  excludes `/api/webhooks/*` (Clerk signs those with Svix and sends no session
+  cookie, so a gate there 401s every delivery and Clerk retries forever)
+- `lib/auth.ts` — `getCurrentUser()` (React `cache()`d, upserts our `User` by
+  `clerkId` on every authenticated request — the guaranteed sync path) and
+  `requireRole()` (redirects for pages, returns 401/403 with
+  `{ context: "route" }` for route handlers)
+- `app/api/webhooks/clerk/route.ts` — `verifyWebhook()`, upsert on
+  `user.created` / `user.updated`, deliberate no-op on `user.deleted`
+- `app/sign-in`, `app/sign-up`, `app/dashboard` — minimal signed-in shell
+
+Auth conventions worth keeping:
+
+- **Roles are never written from Clerk.** `syncUser()` sets `role` on create
+  only; the first OWNER is promoted by hand in the DB, and an update would
+  demote them on their next request.
+- **The proxy is not the authorization boundary.** Server Functions dispatch as
+  POSTs to their own route, so a matcher change can silently drop coverage —
+  every page and route handler re-checks with `getCurrentUser()`/`requireRole()`.
+- `createRouteMatcher` is deprecated in Clerk 7 and `<SignedIn>` / `<SignedOut>`
+  / `<Protect>` were removed in Core 3 — use `<Show when="signed-in">` instead.
+
+Next up: product management (CRUD).
+
+## Prisma 7 Constraints — read before touching the DB layer
+
+- **Do not bump Prisma.** `pnpm add prisma` resolves to an 8.0 release candidate
+  on the `latest` dist-tag. 7.10.0 is pinned deliberately for a fixed-price
+  deliverable.
+- **No `url` in `schema.prisma`.** Prisma 7 requires a driver adapter; queries go
+  through `@prisma/adapter-pg`.
+- **Two connection strings.** App runtime uses the pooled `DATABASE_URL`;
+  migrations use the unpooled `DIRECT_URL` (DDL and advisory locks don't survive
+  PgBouncer).
+- **`P1001` on first connect is usually a Neon cold start.** Retry before
+  diagnosing networking.
+- **Use `prisma migrate`, not `db push`.** Migration history is the source of
+  truth for this deliverable.
 
 ## Data Model
 
@@ -41,6 +95,12 @@ Core users: shop owner (full access) and staff (stock logging, sales checkout).
 
 Products can have shade/variant as a field on the same row (not separate variant
 tables) — keep this simple unless the client asks for combinatorial variants later.
+
+Schema conventions already established:
+
+- Money is `Decimal(12,2)` — never float
+- `onDelete: Restrict` on `Product` and `User` so stock/sales history can't be orphaned
+- `SaleItem` cascades with its parent `Sale`
 
 ## In Scope
 
@@ -73,12 +133,15 @@ tables) — keep this simple unless the client asks for combinatorial variants l
 - Prefer server actions / API routes over client-side data fetching for
   anything touching stock or payment state
 - Commit after each working feature, not at the end of a whole prompt session
+- Verify against the real database rather than assuming — round-trip tests on
+  Decimal handling, enum mapping, unique constraints, and FK restricts are worth
+  the few minutes they cost
 
 ## Build Order
 
-1. Prisma schema + Neon setup
-2. Clerk auth + role-based access
-3. Product management (CRUD)
+1. ~~Prisma schema + Neon setup~~ ✅
+2. ~~Clerk auth + role-based access~~ ✅
+3. Product management (CRUD) ← next
 4. Stock movement logging
 5. Low-stock alerts
 6. Checkout + Paystack STK push + webhook
