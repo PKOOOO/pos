@@ -82,6 +82,18 @@ Next up: product management (CRUD).
   PgBouncer).
 - **`P1001` on first connect is usually a Neon cold start.** Retry before
   diagnosing networking.
+- **`AggregateError [ETIMEDOUT]` with an empty message is NOT a dead database.**
+  Neon resolves to both IPv6 and IPv4; on a network with no IPv6 route Node's
+  Happy Eyeballs falls back to IPv4 but cancels each attempt after 250ms, and
+  the handshake to `us-east-2` measures ~275ms from Kenya — so it failed every
+  time, deterministically. `lib/prisma.ts` raises the budget with
+  `net.setDefaultAutoSelectFamilyAttemptTimeout(5_000)`; do not remove it.
+  Only the Node app is affected — `prisma migrate` uses Prisma's Rust schema
+  engine and connects fine, which is why migrations looked healthy while every
+  app query timed out. See https://github.com/nodejs/node/issues/54359
+- **The DB is in `us-east-2`, ~275ms from Nairobi.** Every query pays that
+  round-trip. If the app feels slow on the shop floor, region is the first
+  thing to look at, not the query — `eu-central-1` would roughly halve it.
 - **Use `prisma migrate`, not `db push`.** Migration history is the source of
   truth for this deliverable.
 
