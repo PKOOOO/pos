@@ -114,6 +114,16 @@ Next up: low-stock alerts.
   on their next request.
 - **`requireRole(Role.STAFF)` accepts an OWNER** — deliberate; the owner has
   full access. Owner-only actions use `requireRole(Role.OWNER)`, which is strict.
+- **A `"use server"` module may only export async functions.** Export a const
+  from one and the client bundle gets an action reference in its place, so the
+  value arrives with none of its fields — `useActionState` started with a state
+  that had no `fieldErrors` and the form crashed on first render. Shared shapes
+  and constants live in `lib/action-state.ts`; the build does not catch this.
+- **Client Components import Prisma enums from `@/generated/prisma/enums`, never
+  `@/generated/prisma/client`.** The client entry pulls in `node:module`, and
+  Turbopack fails the build with "the chunking context does not support external
+  modules (request: node:module)" — which names the page, not the import. The
+  `enums` file is standalone and generated for exactly this.
 
 ## Database Constraints — read before touching the DB layer
 
@@ -223,6 +233,36 @@ Schema conventions already established:
   replay have each caught real issues on this project.
 - Prefer runtime proof over reading config. The webhook exclusion was verified
   with a 404-vs-307 pair, not by inspecting a regex.
+- Concurrency claims need a concurrent test. "Two staff at once can't oversell"
+  was proved by firing five simultaneous OUTs at one product, not by reading the
+  transaction. That test is also what surfaced the `maxWait` default.
+- Form plumbing is shared, not copied: `lib/form-fields.ts` (zod field parsers),
+  `lib/action-state.ts` (the state every form action returns),
+  `productSearchWhere()` in `lib/products.ts`, and `hooks/use-url-search.ts`.
+  Products and stock must accept and reject the same input.
+- Timestamps render through `lib/time.ts` in `Africa/Nairobi`, server-side. The
+  host is UTC, so formatting raw would show a 4pm movement as 1pm; formatting in
+  the browser instead would mismatch during hydration.
+- Colour tokens in `app/globals.css` were chosen by measuring contrast, not by
+  eye, and each carries the hex it was computed from. `lib/clerk-appearance.ts`
+  repeats those hexes because Clerk parses colours itself and can't take
+  `var(--primary)` — change one, change the other.
+
+### Verifying against the database
+
+Scripts can't just be run with `node`: the generated Prisma client uses
+extensionless imports and the app uses `@/` paths. Bundle first, run from the
+repo root so `node_modules` resolves:
+
+    ./node_modules/.bin/esbuild ./check.ts --bundle --platform=node \
+      --format=esm --packages=external --tsconfig=tsconfig.json \
+      --outfile=./check.mjs
+    node --env-file=.env ./check.mjs
+
+Import the real module under test (`lib/stock.ts`), not a copy of its logic.
+Mark test rows with a fixed prefix, delete them in a `finally`, and check for
+leftovers afterwards — a run that dies mid-transaction leaves its rows behind,
+and this database has the client's real data in it.
 
 ## Build Order
 
@@ -230,8 +270,8 @@ Schema conventions already established:
 2. ~~Clerk auth + role-based access~~ ✅
 3. ~~App shell + navigation~~ ✅
 4. ~~Product management (CRUD)~~ ✅
-5. Stock movement logging ← next
-6. Low-stock alerts
+5. ~~Stock movement logging~~ ✅
+6. Low-stock alerts ← next
 7. Checkout + Paystack STK push + webhook
 8. PWA + offline sync (Dexie.js)
 9. Deploy to Vercel
@@ -244,6 +284,9 @@ Schema conventions already established:
 - Target device: shop staff will mostly use this on a phone at the counter, not
   a desktop — design mobile-first. Prioritise contrast and tap-target size:
   this gets used under shop lighting, on cheap screens, by someone in a hurry.
+- `hooks/use-mobile.ts` (shadcn-generated) trips
+  `react-hooks/set-state-in-effect`. Pre-existing and left alone since the file
+  regenerates; `pnpm lint` is otherwise clean, so that one error is the baseline.
 - ngrok's free domain changes on every restart, so the Clerk webhook endpoint
   needs re-pointing each dev session. `allowedDevOrigins` in `next.config.ts`
   needs the current ngrok host too.
