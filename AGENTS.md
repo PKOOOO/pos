@@ -25,7 +25,15 @@ Core users: shop owner (full access) and staff (stock logging, sales checkout).
 - **Database:** PostgreSQL via Neon
 - **Auth:** Clerk (Core 3) — role-based: OWNER / STAFF
 - **Hosting:** Vercel
-- **Styling:** Tailwind CSS + shadcn/ui
+- **Styling:** Tailwind CSS v4 + shadcn/ui — the **`base-nova` style, built on
+  Base UI (`@base-ui/react`), not Radix**. Component APIs differ from the
+  shadcn docs: polymorphism is a `render` prop rather than `asChild`, `Select`
+  takes `items` / `onValueChange(value, details)`, and `AlertDialogAction` is a
+  plain button that does not close the dialog. Read the file in
+  `components/ui/` before assuming a prop exists.
+- **Validation:** zod 4 — `{ error: "..." }`, not `{ message: "..." }`
+- **Toasts:** sonner, mounted once in `app/layout.tsx`
+- **Icons:** lucide-react
 - **Offline:** next-pwa + Dexie.js (IndexedDB) for offline-first stock logging
 - **Payments:** Paystack (Kenya M-Pesa `mobile_money` channel → STK push)
 - **Package manager:** pnpm
@@ -171,6 +179,10 @@ Next up: checkout + Paystack STK push.
   times out.
 - **Use `prisma migrate`, not `db push`.** Migration history is the source of
   truth for this deliverable.
+- **Prisma 7 compares two columns with a field reference** —
+  `{ quantity: { lte: prisma.product.fields.lowStockThreshold } }`. No raw SQL
+  needed for that. Ordering by an *expression* over two columns still isn't
+  supported, which is why the low-stock shortfall sort happens after the fetch.
 - **Two definitions of "low" must stay in step**: `isLowStock()` in
   `lib/products.ts` (rendering) and `LOW_STOCK_WHERE` in `lib/stock.ts` (the
   SQL field-reference predicate). The nav badge and the row highlighting come
@@ -188,12 +200,18 @@ Next up: checkout + Paystack STK push.
   movements on this Neon link fail with `P2028 Unable to start a transaction in
   the given time`. `lib/stock.ts` uses `{ maxWait: 10_000, timeout: 15_000 }`.
 
-## Open Decision
+## Open Decisions
 
-Neon project is in `us-east-2`; the ~275ms handshake is the floor on every
-query from Nairobi. `eu-central-1` would roughly halve it. Moving is cheap while
-the database is empty and expensive after go-live. Not yet actioned — this is a
-client-facing call on a paid deliverable.
+**Low-stock ordering.** The dashboard orders by shortfall
+(`quantity - lowStockThreshold`), worst first, as specified. That ranks a
+product sitting at 0 with a threshold of 0 (shortfall 0) *below* one at 2 of 5
+(shortfall -3), even though the first is actually out of stock. Ask the client
+which reads better on the shop floor; it is one line in `getLowStockProducts()`.
+
+**Neon region.** The project is in `us-east-2`; the ~275ms handshake is the
+floor on every query from Nairobi. `eu-central-1` would roughly halve it. Moving
+is cheap while the database is nearly empty and expensive after go-live. Not yet
+actioned — this is a client-facing call on a paid deliverable.
 
 ## Data Model
 
@@ -307,6 +325,10 @@ and this database has the client's real data in it.
 - Target device: shop staff will mostly use this on a phone at the counter, not
   a desktop — design mobile-first. Prioritise contrast and tap-target size:
   this gets used under shop lighting, on cheap screens, by someone in a hurry.
+- The only `User` row in the database is `hardhaven`, role **STAFF**. Nothing
+  in the app grants OWNER — `syncUser()` sets the role on create only, on
+  purpose — so Reports and product deletion are unreachable until that row is
+  promoted by hand in the database. Worth doing before demoing to the client.
 - `hooks/use-mobile.ts` (shadcn-generated) trips
   `react-hooks/set-state-in-effect`. Pre-existing and left alone since the file
   regenerates; `pnpm lint` is otherwise clean, so that one error is the baseline.
