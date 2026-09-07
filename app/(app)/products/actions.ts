@@ -17,7 +17,10 @@ import {
   wholeNumber,
 } from "@/lib/form-fields";
 
-const PRODUCTS_PATH = "/products";
+// The low-stock badge is rendered by the app shell, so a product change has to
+// revalidate the layout rather than one page — otherwise the count goes stale
+// everywhere except the screen that changed it.
+const APP_TREE = "/";
 
 // Only async functions may be exported from this file — the state shape and its
 // initial value live in lib/action-state.ts, and the field parsers, shared with
@@ -79,7 +82,7 @@ export async function createProduct(
 
   try {
     const product = await prisma.product.create({ data: parsed.data });
-    revalidatePath(PRODUCTS_PATH);
+    revalidatePath(APP_TREE, "layout");
 
     return succeeded(`${product.name} added.`);
   } catch (error) {
@@ -104,8 +107,7 @@ export async function updateProduct(
       data: parsed.data,
     });
 
-    revalidatePath(PRODUCTS_PATH);
-    revalidatePath(`/products/${productId}/edit`);
+    revalidatePath(APP_TREE, "layout");
 
     return succeeded(`${product.name} updated.`);
   } catch (error) {
@@ -145,7 +147,7 @@ export async function deleteProduct(
     }
 
     const product = await prisma.product.delete({ where: { id: productId } });
-    revalidatePath(PRODUCTS_PATH);
+    revalidatePath(APP_TREE, "layout");
 
     return { ok: true, message: `${product.name} deleted.` };
   } catch (error) {

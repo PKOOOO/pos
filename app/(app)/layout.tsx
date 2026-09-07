@@ -4,6 +4,7 @@ import { UserButton } from "@clerk/nextjs";
 import { Badge } from "@/components/ui/badge";
 import { Role } from "@/generated/prisma/client";
 import { getCurrentUser } from "@/lib/auth";
+import { countLowStockProducts } from "@/lib/stock";
 import { clerkAppearance } from "@/lib/clerk-appearance";
 import { BottomNav, SidebarNav } from "@/app/(app)/app-nav";
 
@@ -26,9 +27,13 @@ export default async function AppLayout({
 
   const isOwner = user.role === Role.OWNER;
 
+  // Read here rather than per page so the badge is the same number on every
+  // screen. Actions that can move it revalidate this layout, not just a page.
+  const lowStockCount = await countLowStockProducts();
+
   return (
     <div className="flex min-h-full flex-1">
-      <SidebarNav isOwner={isOwner} />
+      <SidebarNav isOwner={isOwner} lowStockCount={lowStockCount} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b bg-background px-4">
@@ -53,7 +58,7 @@ export default async function AppLayout({
         <div className="flex flex-1 flex-col pb-20 md:pb-0">{children}</div>
       </div>
 
-      <BottomNav isOwner={isOwner} />
+      <BottomNav isOwner={isOwner} lowStockCount={lowStockCount} />
     </div>
   );
 }

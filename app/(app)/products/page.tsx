@@ -72,10 +72,17 @@ export default async function ProductsPage({
   // by name uses @@index([name]).
   const where = productSearchWhere({ query, category });
 
-  const [products, totalCount] = await Promise.all([
+  const [matches, totalCount] = await Promise.all([
     prisma.product.findMany({ where, orderBy: { name: "asc" } }),
     prisma.product.count(),
   ]);
+
+  // What needs restocking comes first by default. `sort` is stable, so within
+  // each group the database's name ordering survives, and the search and
+  // category filter above are untouched — this only reorders what they matched.
+  const products = [...matches].sort(
+    (a, b) => Number(isLowStock(b)) - Number(isLowStock(a)),
+  );
 
   const filtered = Boolean(query || category);
   const lowStockCount = products.filter(isLowStock).length;

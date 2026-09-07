@@ -78,10 +78,10 @@ export async function logStockMovement(
 
     const { name, quantity: now, unit } = outcome.product;
 
-    revalidatePath("/stock");
-    revalidatePath("/products");
-    revalidatePath(`/products/${productId}/edit`);
-    revalidatePath("/dashboard");
+    // The low-stock badge lives in the app shell, so revalidating single pages
+    // would leave a stale count on every other screen. Every page here is
+    // request-rendered anyway, so there is no cached work being thrown away.
+    revalidatePath("/", "layout");
 
     return succeeded(
       `${type === MovementType.IN ? "Added" : "Removed"} ${quantity} — ${name} is now ${now} ${unit}.`,

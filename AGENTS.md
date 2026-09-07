@@ -32,7 +32,7 @@ Core users: shop owner (full access) and staff (stock logging, sales checkout).
 
 ## Current State
 
-Steps 1–5 done.
+Steps 1–6 done.
 
 **Prisma + Neon** — migrated, no drift.
 - `prisma/schema.prisma` — five models, `Role` / `MovementType` / `SaleStatus`
@@ -89,7 +89,19 @@ included.
 - `lib/time.ts` — timestamps are formatted in `Africa/Nairobi`, not the host's
   zone, and on the server so hydration can't disagree
 
-Next up: low-stock alerts.
+**Low-stock alerts** — in-app only; email/SMS is out of scope.
+- `lib/stock.ts` — `getLowStockProducts()` / `countLowStockProducts()`. The
+  `quantity <= lowStockThreshold` comparison is column-to-column, done in SQL
+  through a Prisma field reference; the worst-shortfall ordering can't be
+  indexed, so it is applied after the fetch over an already-small set
+- `/dashboard` — count badge, worst five, each row linking to
+  `/stock?product=<id>` so restocking is one tap from the alert
+- The app shell renders the count as a badge on the Products nav item, so any
+  action that can move it revalidates `("/", "layout")` rather than a page
+- `/products` — low stock sorted to the top by default; the sort is stable, so
+  search and category filter are unaffected
+
+Next up: checkout + Paystack STK push.
 
 ## Next.js 16 / Clerk Core 3 Constraints
 
@@ -119,6 +131,13 @@ Next up: low-stock alerts.
   value arrives with none of its fields — `useActionState` started with a state
   that had no `fieldErrors` and the form crashed on first render. Shared shapes
   and constants live in `lib/action-state.ts`; the build does not catch this.
+- **Anything rendered by `app/(app)/layout.tsx` needs
+  `revalidatePath("/", "layout")`, not a page path.** Layouts are preserved
+  across client navigation, so a page-level revalidate leaves the low-stock
+  badge stale on every other screen. Every route here is request-rendered, so
+  the wider invalidation throws away no cached work. It still only refreshes
+  *this* user's tree — a badge goes stale if another staff member logs a
+  movement, until the next navigation.
 - **Client Components import Prisma enums from `@/generated/prisma/enums`, never
   `@/generated/prisma/client`.** The client entry pulls in `node:module`, and
   Turbopack fails the build with "the chunking context does not support external
@@ -152,6 +171,10 @@ Next up: low-stock alerts.
   times out.
 - **Use `prisma migrate`, not `db push`.** Migration history is the source of
   truth for this deliverable.
+- **Two definitions of "low" must stay in step**: `isLowStock()` in
+  `lib/products.ts` (rendering) and `LOW_STOCK_WHERE` in `lib/stock.ts` (the
+  SQL field-reference predicate). The nav badge and the row highlighting come
+  from different ones.
 - **`Product.quantity` has exactly two writers**: product creation, and
   `applyStockMovement()` in `lib/stock.ts`. Anything else breaks the audit
   trail — the movement rows must always add up to the count.
@@ -271,8 +294,8 @@ and this database has the client's real data in it.
 3. ~~App shell + navigation~~ ✅
 4. ~~Product management (CRUD)~~ ✅
 5. ~~Stock movement logging~~ ✅
-6. Low-stock alerts ← next
-7. Checkout + Paystack STK push + webhook
+6. ~~Low-stock alerts~~ ✅
+7. Checkout + Paystack STK push + webhook ← next
 8. PWA + offline sync (Dexie.js)
 9. Deploy to Vercel
 

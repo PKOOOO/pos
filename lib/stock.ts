@@ -79,3 +79,64 @@ export async function applyStockMovement({
     { maxWait: 10_000, timeout: 15_000 },
   );
 }
+
+export type LowStockProduct = {
+  id: string;
+  name: string;
+  shade: string | null;
+  unit: string;
+  quantity: number;
+  lowStockThreshold: number;
+};
+
+// The same predicate as isLowStock() in lib/products.ts, expressed for the
+// database: a column-to-column comparison, which Prisma does with a field
+// reference. If one of the two changes, change both — the nav badge and the row
+// highlighting must never disagree about what "low" means.
+const LOW_STOCK_WHERE = {
+  quantity: { lte: prisma.product.fields.lowStockThreshold },
+};
+
+const LOW_STOCK_FIELDS = {
+  id: true,
+  name: true,
+  shade: true,
+  unit: true,
+  quantity: true,
+  lowStockThreshold: true,
+} as const;
+
+/** How far under its threshold a product is. Negative is worse; 0 is exactly at. */
+export function stockShortfall(product: {
+  quantity: number;
+  lowStockThreshold: number;
+}): number {
+  return product.quantity - product.lowStockThreshold;
+}
+
+/**
+ * Every product at or below its low-stock threshold, worst shortfall first.
+ *
+ * The ordering key is `quantity - lowStockThreshold`, which no index can sort
+ * by, so it is applied after the fetch — the result set is only ever the items
+ * that need restocking. The database orders by name first and `sort` is stable,
+ * so products with the same shortfall stay alphabetical.
+ */
+export async function getLowStockProducts(
+  limit?: number,
+): Promise<LowStockProduct[]> {
+  const products = await prisma.product.findMany({
+    where: LOW_STOCK_WHERE,
+    select: LOW_STOCK_FIELDS,
+    orderBy: { name: "asc" },
+  });
+
+  products.sort((a, b) => stockShortfall(a) - stockShortfall(b));
+
+  return limit === undefined ? products : products.slice(0, limit);
+}
+
+/** Just the number, for the nav badge on every signed-in page. */
+export async function countLowStockProducts(): Promise<number> {
+  return prisma.product.count({ where: LOW_STOCK_WHERE });
+}
