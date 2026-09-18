@@ -64,6 +64,34 @@ export const money = (label: string) =>
       `${label} is too large`,
     );
 
+/**
+ * A Kenyan mobile number, normalised to `+2547XXXXXXXX` / `+2541XXXXXXXX`.
+ *
+ * Staff type whatever is on the customer's phone — `0712 345 678`,
+ * `254712345678`, `+254712345678` — and Paystack wants one shape. Normalising
+ * here rather than at the call site means the number stored on the Sale is the
+ * same string we asked Paystack to charge.
+ *
+ * `07…` and `01…` are both live mobile ranges; the recovered sale rows used a
+ * `+25411…` number, so rejecting `01` would have refused a real customer.
+ */
+export const kenyanPhone = (label: string) =>
+  z
+    .string()
+    .trim()
+    .min(1, `${label} is required`)
+    .transform((value) => value.replace(/[\s()-]/g, ""))
+    .transform((value) => {
+      if (value.startsWith("+254")) return value;
+      if (value.startsWith("254")) return `+${value}`;
+      if (value.startsWith("0")) return `+254${value.slice(1)}`;
+      return value;
+    })
+    .refine(
+      (value) => /^\+254[17]\d{8}$/.test(value),
+      `${label} must be a Kenyan mobile number, like 0712 345 678`,
+    );
+
 export function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
   const fieldErrors: Record<string, string> = {};
 

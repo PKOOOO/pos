@@ -40,9 +40,8 @@ Core users: shop owner (full access) and staff (stock logging, sales checkout).
 
 ## Current State
 
-Steps 1–6 done, plus product pricing. **Checkout is not built** — if the database
-already holds `Sale` rows, that is residue from the lost work described below,
-not a working feature.
+Steps 1–7 done. The four `Sale` rows dated 2026-09-07 predate the rebuild — they
+are residue from the lost work described below, not from the current code.
 
 ### Recovering from the lost laptop (2026-09-18)
 
@@ -84,8 +83,8 @@ the schema file and the database agree. Do not trust `migrate status` alone.
 - `app/(app)/products/actions.ts` — `createProduct` / `updateProduct` (STAFF)
   and `deleteProduct` (OWNER, strict), each calling `requireRole()` first; zod
   validation; the update schema has no `quantity` field at all
-- `app/(app)/products/form-state.ts` — the action state shape lives here, NOT
-  in `actions.ts`: a `"use server"` module may only export async functions
+- the action state shape lives in `lib/action-state.ts`, NOT in `actions.ts`:
+  a `"use server"` module may only export async functions
 - `app/(app)/products/page.tsx` — list, search + category filter in URL params,
   table on desktop / tappable cards on phones, low-stock rows flagged
 - `app/(app)/products/new` and `.../[id]/edit` — dedicated form routes (fewer
@@ -101,7 +100,7 @@ every URL under it is unchanged.
 - `lib/clerk-appearance.ts` — shared `appearance` for `<SignIn>`, `<SignUp>`,
   `<UserButton>`. Clerk parses colours itself, so these are hex duplicates of
   the `globals.css` tokens — change one, change the other
-- `/stock`, `/sell`, `/reports` are placeholders so the nav can't 404
+- `/reports` is still a placeholder so the nav can't 404
 
 **Stock movement logging** — verified against a live database, concurrency
 included.
@@ -132,7 +131,24 @@ included.
 - `/products` — low stock sorted to the top by default; the sort is stable, so
   search and category filter are unaffected
 
-Next up: checkout + Paystack STK push.
+**Checkout + Paystack STK push** — rebuilt. Verified against the live database
+and the running dev server; **not yet against Paystack itself** (see below).
+- `lib/paystack.ts` — charge request, `verifyCharge`, and
+  `isValidPaystackSignature` (HMAC-SHA512 over the raw body, constant-time
+  compare). Server-only: the secret key both authorises charges and signs
+  webhooks, so leaking it would let anyone forge a payment.
+- `lib/sales.ts` — `createPendingSale()` prices **from the database**, never from
+  the cart; `settleSale()` is the idempotent settlement both the webhook and the
+  poller go through. Kept out of the action so it can be exercised without a
+  session.
+- `app/api/webhooks/paystack/route.ts` — verifies, then settles. Acks unknown
+  references and unhandled event types; 500s only on our own failure, because
+  Paystack's retry is then what we want.
+- `app/(app)/sell/` — `page.tsx` (whole catalogue, filtered in the browser),
+  `sell-terminal.tsx` (cart, phone, waiting screen), `actions.ts`,
+  `checkout-state.ts` (the state shape, out of the `"use server"` module).
+
+Next up: `/sales` list, then `/reports`, then pagination.
 
 ## Next.js 16 / Clerk Core 3 Constraints
 
@@ -236,7 +252,56 @@ Next up: checkout + Paystack STK push.
   movements on this Neon link fail with `P2028 Unable to start a transaction in
   the given time`. `lib/stock.ts` uses `{ maxWait: 10_000, timeout: 15_000 }`.
 
+## Checkout Constraints
+
+- **`Product.quantity` still has exactly two writers.** Sale settlement goes
+  through `applyStockMovementWithin(tx, …)` — the same body as
+  `applyStockMovement()`, exposed so several movements and the status change
+  commit as one transaction. A nested `$transaction` would be a *separate*
+  transaction, and a crash midway would decrement stock for a sale still PENDING.
+- **Idempotency is the Sale row's status, taken under `SELECT … FOR UPDATE`.**
+  Check-then-write without the lock lets two concurrent deliveries both pass the
+  check and decrement twice. Proved with simultaneous settlements of one sale:
+  exactly one settles, the rest report "already" and touch nothing.
+- **The signature is verified over `await request.text()`**, never
+  `request.json()` — parsing and re-serialising does not reproduce the bytes
+  Paystack signed. Compared with `timingSafeEqual`, which needs the length guard
+  because it throws on mismatched lengths.
+- **Money reaches Paystack as integer cents** (`toMinorUnits`). Totals are summed
+  in cents and converted back once, so no running total ever goes through a
+  float. `19.99 × 100` in floating point is `1998.9999999999998`.
+- **Prices come from the database at checkout.** The cart sends product ids and
+  quantities only. `SaleItem.unitPrice` is a copy, so re-pricing never rewrites
+  history.
+- **Stock decrements on webhook success, not at cart time.** Matches the
+  recovered implementation. Nothing is reserved while PENDING, so the cart's
+  stock check is advisory only — see Open Decisions.
+- **Five simultaneous settlements of one sale broke the connection**
+  (`Connection terminated unexpectedly` at `startTransaction`) because each
+  blocked transaction holds a pooled Neon connection while it waits on the row
+  lock. Three is fine. Real Paystack retries are seconds apart, so this is a
+  stress-test artefact rather than a production path — but do not raise the
+  fan-out in the verification script without re-checking it.
+- **The verification script needs `server-only` stubbed**:
+  `--alias:server-only=<a file exporting nothing>`. pnpm does not hoist it, so
+  the bundle cannot resolve it otherwise.
+
 ## Open Decisions
+
+**Checkout has never talked to Paystack.** Every layer around it is verified —
+signature handling, settlement, idempotency, the webhook's HTTP behaviour — but
+no real STK push has been sent since the rebuild. Two things are unconfirmed
+until one is: whether Paystack accepts the derived customer email
+(`<msisdn>@mpesa.pos.invalid` — it wants an address and the shop only has phone
+numbers), and the exact `data.status` strings it returns for M-Pesa. Send one
+10 KES charge to a real phone before demoing.
+
+**Stock is not reserved during PENDING.** Two staff can both build carts for the
+last item and both get a prompt; whichever webhook lands second finds the count
+already at zero, and the sale settles with a logged shortfall rather than driving
+stock negative. This matches the lost implementation. Reserving at cart time
+would prevent it but strands stock whenever a customer walks away from a prompt.
+Worth asking the client which failure they would rather have.
 
 **Low-stock ordering.** The dashboard orders by shortfall
 (`quantity - lowStockThreshold`), worst first, as specified. That ranks a
@@ -356,7 +421,7 @@ and this database has the client's real data in it.
 4. ~~Product management (CRUD)~~ ✅
 5. ~~Stock movement logging~~ ✅
 6. ~~Low-stock alerts~~ ✅
-7. Checkout + Paystack STK push + webhook ← next
+7. ~~Checkout + Paystack STK push + webhook~~ ✅ (untested against Paystack itself)
 8. PWA + offline sync (Dexie.js)
 9. Deploy to Vercel
 
