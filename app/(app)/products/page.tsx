@@ -28,6 +28,7 @@ import {
   isProductCategory,
   productSearchWhere,
 } from "@/lib/products";
+import { formatKes } from "@/lib/money";
 import { firstSearchParam } from "@/lib/search-params";
 import { ProductFilters } from "@/app/(app)/products/product-filters";
 
@@ -175,6 +176,9 @@ export default async function ProductsPage({
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
+                      <p className="text-sm font-medium tabular-nums">
+                        {formatKes(product.sellingPrice.toFixed(2))}
+                      </p>
                       <div>
                         <StockBadge product={product} />
                       </div>
@@ -201,6 +205,7 @@ export default async function ProductsPage({
                   <TableHead>Name</TableHead>
                   <TableHead>Shade</TableHead>
                   <TableHead>Category</TableHead>
+                  <TableHead className="text-right">Price</TableHead>
                   <TableHead className="text-right">Quantity</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead>Stock</TableHead>
@@ -225,6 +230,9 @@ export default async function ProductsPage({
                         {product.shade ?? "—"}
                       </TableCell>
                       <TableCell>{product.category}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatKes(product.sellingPrice.toFixed(2))}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {product.quantity}
                       </TableCell>

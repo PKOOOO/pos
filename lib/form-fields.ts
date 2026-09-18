@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { ActionState } from "@/lib/action-state";
+import { MAX_MONEY_INTEGER_DIGITS } from "@/lib/money";
 
 /**
  * Field parsers shared by every form action, so products and stock movements
@@ -40,6 +41,28 @@ export const positiveWholeNumber = (label: string) =>
     (value) => value > 0,
     `${label} must be at least 1`,
   );
+
+/**
+ * An amount of money, which stays a **string** — Prisma takes one for a Decimal
+ * column, and `Number()` here would route every price through a float.
+ *
+ * The length check counts digits rather than comparing magnitudes, for the same
+ * reason. Zero is allowed: a free sample or a promotional item is priced at 0,
+ * and that is different from leaving the box empty.
+ */
+export const money = (label: string) =>
+  z
+    .string()
+    .trim()
+    .min(1, `${label} is required`)
+    .regex(
+      /^\d+(\.\d{1,2})?$/,
+      `${label} must be an amount like 1200 or 1200.50`,
+    )
+    .refine(
+      (value) => value.split(".")[0].length <= MAX_MONEY_INTEGER_DIGITS,
+      `${label} is too large`,
+    );
 
 export function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
   const fieldErrors: Record<string, string> = {};

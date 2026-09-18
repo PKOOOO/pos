@@ -11,6 +11,7 @@ import type { ActionState } from "@/lib/action-state";
 import {
   failed,
   invalid,
+  money,
   optionalText,
   requiredText,
   succeeded,
@@ -41,6 +42,11 @@ const productFields = {
   // The column is nullable; an empty box means "no shade", not "".
   shade: optionalText("Shade", 80),
   lowStockThreshold: wholeNumber("Low-stock threshold"),
+  // Unlike `quantity`, prices stay editable after create: re-pricing a product
+  // is a normal shop action and rewrites no history, because checkout copies
+  // the price onto SaleItem.unitPrice at the moment of sale.
+  sellingPrice: money("Selling price"),
+  costPrice: money("Cost price"),
 };
 
 const createProductSchema = z.object({
@@ -61,6 +67,8 @@ function readProductForm(formData: FormData) {
     unit: formData.get("unit") ?? "",
     quantity: formData.get("quantity") ?? "",
     lowStockThreshold: formData.get("lowStockThreshold") ?? "",
+    sellingPrice: formData.get("sellingPrice") ?? "",
+    costPrice: formData.get("costPrice") ?? "",
   };
 }
 

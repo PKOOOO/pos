@@ -32,6 +32,10 @@ export type ProductFormValues = {
   category: string;
   shade: string | null;
   unit: string;
+  // Strings, not Decimals: Prisma's Decimal is a class instance and cannot cross
+  // into a Client Component. The page passes `price.toFixed(2)`. See lib/money.ts.
+  sellingPrice: string;
+  costPrice: string;
   quantity: number;
   lowStockThreshold: number;
 };
@@ -161,6 +165,56 @@ export function ProductForm({ product }: { product?: ProductFormValues }) {
           </Select>
           <FieldError>{error("unit")}</FieldError>
         </Field>
+
+        {/* Side by side from `sm` up; stacked on a phone so neither box gets
+            too narrow to read a price in. */}
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="sellingPrice" className="text-base">
+              Selling price
+            </FieldLabel>
+            <Input
+              id="sellingPrice"
+              name="sellingPrice"
+              // `text` + `inputMode="decimal"` rather than `type="number"`:
+              // number inputs swallow a trailing "." mid-typing and expose
+              // spinners nobody wants on a price.
+              type="text"
+              inputMode="decimal"
+              defaultValue={product?.sellingPrice ?? ""}
+              placeholder="1200.00"
+              autoComplete="off"
+              required
+              aria-invalid={Boolean(error("sellingPrice"))}
+              className={CONTROL}
+            />
+            <FieldDescription>What the customer pays, in KES.</FieldDescription>
+            <FieldError>{error("sellingPrice")}</FieldError>
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="costPrice" className="text-base">
+              Cost price
+            </FieldLabel>
+            <Input
+              id="costPrice"
+              name="costPrice"
+              type="text"
+              inputMode="decimal"
+              defaultValue={product?.costPrice ?? ""}
+              placeholder="800.00"
+              autoComplete="off"
+              required
+              aria-invalid={Boolean(error("costPrice"))}
+              className={CONTROL}
+            />
+            <FieldDescription>
+              What the shop paid. Used for margin reporting, never shown at
+              checkout.
+            </FieldDescription>
+            <FieldError>{error("costPrice")}</FieldError>
+          </Field>
+        </div>
 
         <Field>
           <FieldLabel htmlFor="quantity" className="text-base">

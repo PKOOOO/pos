@@ -40,9 +40,32 @@ Core users: shop owner (full access) and staff (stock logging, sales checkout).
 
 ## Current State
 
-Steps 1–6 done.
+Steps 1–6 done, plus product pricing. **Checkout is not built** — if the database
+already holds `Sale` rows, that is residue from the lost work described below,
+not a working feature.
 
-**Prisma + Neon** — migrated, no drift.
+### Recovering from the lost laptop (2026-09-18)
+
+Work from 2026-09-07 was committed locally but **never pushed**. The machine
+holding those commits is gone, so everything after `66a6adc` is unrecoverable:
+checkout + Paystack STK push + webhook, a `/sales` screen, a full `/reports`
+audit trail, and a shared `Pager` with pagination across four screens.
+
+What survived is in the database, and it is the spec for the rebuild:
+
+- Two migrations existed in `_prisma_migrations` with no local files. Both have
+  been reconstructed — the SQL reproduces the same end state but is **not** the
+  original bytes, so their recorded checksums were updated to match.
+- Four `Sale` rows (two FAILED, then two SUCCESS) against one phone number, each
+  success paired with an `OUT` movement noted `Sale <paystackReference>`. That is
+  the shape the rebuilt checkout has to reproduce: decrement on webhook success
+  only, through the audit trail, never on the charge response.
+
+**Push after every commit.** A local commit is not a backup.
+
+**Prisma + Neon** — migrated, no drift. Verified with `migrate diff`
+(`--from-schema … --to-config-datasource`), which reports an empty migration when
+the schema file and the database agree. Do not trust `migrate status` alone.
 - `prisma/schema.prisma` — five models, `Role` / `MovementType` / `SaleStatus`
   enums, relations, indexes on every FK plus products by category/name,
   movement history newest-first per product, sales by status
@@ -173,6 +196,19 @@ Next up: checkout + Paystack STK push.
   the `AggregateError` to see the real per-address errors.
 - **`P1001` on first connect can be a Neon cold start** — retry once. It is a
   different failure from `ETIMEDOUT`; don't conflate them.
+- **`prisma migrate status` cannot see migrations the database has and your
+  folder doesn't.** It reported "Database schema is up to date!" while the
+  database held two migrations with no local files and two extra `NOT NULL`
+  columns. Product creation failed with `23502` the whole time. Use
+  `prisma migrate diff --from-schema prisma/schema.prisma
+  --to-config-datasource --script` — an empty migration is the only real proof.
+- **Prisma 7 renamed `--from-schema-datamodel` to `--from-schema`**, and
+  `--to-config-datasource` reads the URL from `prisma7.config.ts`, so no
+  connection string has to be passed on the command line.
+- **Never `source .env`.** The connection strings contain `&`
+  (`sslmode=require&channel_binding=require`); the shell backgrounds at the `&`,
+  truncating the value *and* echoing the password. Use
+  `node --env-file=.env`, or let the Prisma CLI read the config file.
 - **A clean `prisma migrate status` does NOT prove the app can reach the
   database.** Migrations use Prisma's Rust schema engine with its own DNS and
   never touch Node's socket path. Migrations can succeed while every app query
@@ -226,7 +262,14 @@ tables) — keep this simple unless the client asks for combinatorial variants l
 
 Schema conventions already established:
 
-- Money is `Decimal(12,2)` — never float
+- Money is `Decimal(12,2)` — never float. It is a **string** everywhere above the
+  database: Prisma accepts one for a Decimal column, and Prisma's `Decimal` is a
+  class instance that cannot cross into a Client Component. Server Components
+  pass `price.toFixed(2)`. See `lib/money.ts`.
+- `Product.sellingPrice` / `costPrice` are required with no default, so a create
+  that omits them fails rather than silently storing 0. Prices stay editable
+  after create — unlike `quantity` — because checkout copies `sellingPrice` onto
+  `SaleItem.unitPrice`, so re-pricing never rewrites what past sales charged.
 - `onDelete: Restrict` on `Product` and `User` so stock/sales history can't be
   orphaned. Handle `P2003` with a readable message rather than letting it throw.
 - `SaleItem` cascades with its parent `Sale`
@@ -329,9 +372,12 @@ and this database has the client's real data in it.
   in the app grants OWNER — `syncUser()` sets the role on create only, on
   purpose — so Reports and product deletion are unreachable until that row is
   promoted by hand in the database. Worth doing before demoing to the client.
-- `hooks/use-mobile.ts` (shadcn-generated) trips
-  `react-hooks/set-state-in-effect`. Pre-existing and left alone since the file
-  regenerates; `pnpm lint` is otherwise clean, so that one error is the baseline.
+- `hooks/use-mobile.ts` and `components/ui/carousel.tsx` (both shadcn-generated)
+  trip `react-hooks/set-state-in-effect`. Pre-existing and left alone since those
+  files regenerate; `pnpm lint` is otherwise clean, so **two** errors are the
+  baseline. The lint script is `eslint` — `next lint` was removed in Next 16.
+- `esbuild` is a declared devDependency, used only by the verification recipe
+  above. It went missing once when it was merely transitive.
 - ngrok's free domain changes on every restart, so the Clerk webhook endpoint
   needs re-pointing each dev session. `allowedDevOrigins` in `next.config.ts`
   needs the current ngrok host too.

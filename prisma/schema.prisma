@@ -43,6 +43,12 @@ model Product {
   category          String
   shade             String?
   unit              String
+  // Money is Decimal(12,2), never float. `sellingPrice` is what the customer
+  // pays and is copied onto SaleItem.unitPrice at checkout, so re-pricing a
+  // product never rewrites what past sales charged. `costPrice` is margin
+  // reporting only and is never shown on the shop floor.
+  sellingPrice      Decimal  @db.Decimal(12, 2)
+  costPrice         Decimal  @db.Decimal(12, 2)
   quantity          Int      @default(0)
   lowStockThreshold Int      @default(0)
   createdAt         DateTime @default(now())
@@ -78,7 +84,10 @@ model StockMovement {
 model Sale {
   id                String     @id @default(cuid())
   staffId           String
-  customerPhone     String
+  // Nullable: the number the charge actually reached belongs to Paystack, not to
+  // us. Staff type a number to start the STK push, but the authoritative value
+  // arrives on the webhook — and a sale can be recorded before either exists.
+  customerPhone     String?
   totalAmount       Decimal    @db.Decimal(12, 2)
   paystackReference String?    @unique
   status            SaleStatus @default(PENDING)

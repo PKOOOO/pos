@@ -64,6 +64,9 @@ export default async function EditProductPage({
           category: product.category,
           shade: product.shade,
           unit: product.unit,
+          // Decimal → string at the boundary; see lib/money.ts.
+          sellingPrice: product.sellingPrice.toFixed(2),
+          costPrice: product.costPrice.toFixed(2),
           quantity: product.quantity,
           lowStockThreshold: product.lowStockThreshold,
         }}
