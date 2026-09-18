@@ -185,6 +185,19 @@ Next up: `/sales` list, then `/reports`, then pagination.
   the wider invalidation throws away no cached work. It still only refreshes
   *this* user's tree — a badge goes stale if another staff member logs a
   movement, until the next navigation.
+- **Restart `next dev` after every `prisma generate`, and clear `.next` first.**
+  Turbopack does not watch `generated/`, so a running dev server keeps serving
+  the client it loaded at boot. The symptom is a `PrismaClientValidationError`
+  naming a field that demonstrably exists — "Unknown field `sellingPrice` for
+  select statement on model `Product`" — while `tsc`, `pnpm build` and any
+  bundled verification script all pass against the same schema. Check the dev
+  server's start time against `generated/prisma/models/*.ts` mtime before
+  suspecting the code:
+
+      rm -rf .next && pnpm dev
+
+  Note that `pnpm add <anything>` re-runs `prisma generate` through the
+  `postinstall` hook, so an unrelated install can also strand a dev server.
 - **Client Components import Prisma enums from `@/generated/prisma/enums`, never
   `@/generated/prisma/client`.** The client entry pulls in `node:module`, and
   Turbopack fails the build with "the chunking context does not support external
